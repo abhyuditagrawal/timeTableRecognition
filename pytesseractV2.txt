@@ -1,0 +1,433 @@
+import os
+import json
+import pandas as pd
+import re
+import pytesseract
+from datetime import datetime
+from collections import defaultdict
+
+class FinalTimetableExtractor:
+    def __init__(self):
+        print("🚀 Final Optimized Timetable Extractor")
+        print("=" * 60)
+        
+        try:
+            version = pytesseract.get_tesseract_version()
+            print(f"✅ Tesseract version: {version}")
+            self.tesseract_available = True
+        except Exception as e:
+            print(f"❌ Tesseract not found: {e}")
+            self.tesseract_available = False
+            return
+        
+        # Known values from your timetable image
+        self.known_subjects = ['DSA', 'DLD', 'DM', 'PEM', 'CN', 'P&S', 'TC', 'BREAK', 'LIBRARY']
+        self.known_faculties = ['DDA', 'VGO', 'CRO', 'VSG', 'MNA', 'JGO', 'KPA', 'NGU']
+        self.known_rooms = [
+            'CR-401', 'CR-403', 'CR-405', 'CR-507', 'TR-501', 
+            'CL-705', 'CL-803', 'CL-DE Lab', 'CL-AI Lab', 
+            'LAB L2-IT', 'LAB L3-IT', 'CC-801'
+        ]
+        self.days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+        self.time_slots = [
+            '8:00-9:00', '9:00-10:00', '10:00-11:00', '11:00-12:00',
+            '12:00-1:00', '1:00-2:00', '2:00-3:00', '3:00-4:00', '4:00-5:00'
+        ]
+
+    def extract_with_refined_approach(self, image_path):
+        """Extract text with refined coordinate mapping"""
+        print("🔍 Extracting with refined coordinate mapping...")
+        
+        try:
+            # Use PSM 6 with higher DPI for better accuracy
+            config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz[]()&:-/\n '
+            data = pytesseract.image_to_data(
+                image_path,
+                config=config,
+                output_type=pytesseract.Output.DICT
+            )
+            return self.process_refined_data(data)
+        except Exception as e:
+            print(f"❌ Extraction failed: {e}")
+            return None
+
+    def process_refined_data(self, data):
+        """Process OCR data with better coordinate mapping"""
+        
+        # Extract high-confidence text blocks
+        text_blocks = []
+        for i, text in enumerate(data['text']):
+            if text.strip() and int(data['conf'][i]) > 35:  # Slightly lower threshold
+                text_blocks.append({
+                    'text': text.strip(),
+                    'x': data['left'][i],
+                    'y': data['top'][i],
+                    'width': data['width'][i],
+                    'height': data['height'][i],
+                    'conf': int(data['conf'][i])
+                })
+        
+        print(f"📝 Extracted {len(text_blocks)} text blocks")
+        
+        # Show sample blocks for debugging
+        print("📋 Sample text blocks:")
+        for i, block in enumerate(sorted(text_blocks, key=lambda x: (x['y'], x['x']))[:20]):
+            print(f"   {i+1:2d}. '{block['text']}' at ({block['x']}, {block['y']}) conf:{block['conf']}")
+        
+        return self.create_refined_timetable(text_blocks)
+
+    def create_refined_timetable(self, text_blocks):
+        """Create timetable with improved coordinate mapping"""
+        
+        # Sort blocks by position
+        text_blocks.sort(key=lambda x: (x['y'], x['x']))
+        
+        # Define more accurate column boundaries based on your image
+        # These should be adjusted based on your specific image dimensions
+        col_boundaries = {
+            0: (0, 150),      # Time column
+            1: (150, 320),    # Monday
+            2: (320, 490),    # Tuesday  
+            3: (490, 660),    # Wednesday
+            4: (660, 830),    # Thursday
+            5: (830, 1000),   # Friday
+            6: (1000, 1200)   # Saturday
+        }
+        
+        # Define row boundaries (Y coordinates for time slots)
+        row_boundaries = {
+            0: (120, 160),   # 8:00-9:00
+            1: (160, 200),   # 9:00-10:00
+            2: (200, 240),   # 10:00-11:00
+            3: (240, 280),   # 11:00-12:00
+            4: (280, 320),   # 12:00-1:00
+            5: (320, 360),   # 1:00-2:00
+            6: (360, 450),   # 2:00-3:00 (larger for split cells)
+            7: (450, 490),   # 3:00-4:00
+            8: (490, 530)    # 4:00-5:00
+        }
+        
+        # Group text blocks by table cells
+        table_cells = defaultdict(list)
+        
+        for block in text_blocks:
+            # Skip obvious header content
+            if self.is_header_content(block['text']):
+                continue
+            
+            # Find column
+            col_idx = self.find_column(block['x'], col_boundaries)
+            
+            # Find row
+            row_idx = self.find_row(block['y'], row_boundaries)
+            
+            if col_idx > 0 and row_idx >= 0:  # Skip time column and headers
+                cell_key = (row_idx, col_idx)
+                table_cells[cell_key].append(block)
+        
+        # Convert to timetable entries
+        return self.create_final_entries(table_cells)
+
+    def find_column(self, x_pos, boundaries):
+        """Find column index based on X position"""
+        for col_idx, (start, end) in boundaries.items():
+            if start <= x_pos < end:
+                return col_idx
+        return -1
+
+    def find_row(self, y_pos, boundaries):
+        """Find row index based on Y position"""
+        for row_idx, (start, end) in boundaries.items():
+            if start <= y_pos < end:
+                return row_idx
+        return -1
+
+    def is_header_content(self, text):
+        """Check if text is header content"""
+        header_keywords = [
+            'TIME', 'DAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY',
+            'PROGRAM', 'BTECH', 'COMPUTER', 'ENGINEERING', 'DIV', 'SEM', 'W.E.F'
+        ]
+        return any(keyword in text.upper() for keyword in header_keywords)
+
+    def create_final_entries(self, table_cells):
+        """Create final timetable entries with complete information"""
+        
+        entries = []
+        entry_id = 1
+        
+        for (row_idx, col_idx), cell_blocks in table_cells.items():
+            # Get day and time
+            day = self.days[col_idx - 1] if col_idx - 1 < len(self.days) else f"Day_{col_idx}"
+            time_slot = self.time_slots[row_idx] if row_idx < len(self.time_slots) else f"Period_{row_idx + 1}"
+            
+            # Combine and clean cell text
+            combined_text = self.combine_cell_text(cell_blocks)
+            
+            if not combined_text or len(combined_text.strip()) < 2:
+                continue
+            
+            # Parse with advanced techniques
+            parsed = self.advanced_parse_cell(combined_text)
+            
+            if parsed['subject'] and parsed['subject'] != 'UNKNOWN':
+                entry = {
+                    'id': entry_id,
+                    'day': day,
+                    'time': time_slot,
+                    **parsed
+                }
+                entries.append(entry)
+                entry_id += 1
+                
+                # Enhanced logging
+                faculty_str = f"[{parsed['faculty']}]" if parsed['faculty'] else ""
+                room_str = f" @ {parsed['room']}" if parsed['room'] else ""
+                batch_str = f" ({parsed['batch']})" if parsed['batch'] else ""
+                print(f"   ✅ {day} {time_slot}: {parsed['subject']} {faculty_str}{room_str}{batch_str}")
+        
+        return entries
+
+    def combine_cell_text(self, cell_blocks):
+        """Intelligently combine text blocks from same cell"""
+        if not cell_blocks:
+            return ""
+        
+        # Sort blocks within cell by position (top to bottom, left to right)
+        sorted_blocks = sorted(cell_blocks, key=lambda x: (x['y'], x['x']))
+        
+        # Combine with smart spacing
+        combined_parts = []
+        for block in sorted_blocks:
+            text = block['text'].strip()
+            if text:
+                combined_parts.append(text)
+        
+        return ' '.join(combined_parts)
+
+    def advanced_parse_cell(self, cell_text):
+        """Advanced cell parsing with better pattern recognition"""
+        
+        result = {
+            'subject': '',
+            'faculty': '',
+            'room': '',
+            'batch': '',
+            'type': 'lecture'
+        }
+        
+        # Clean input text
+        original_text = cell_text
+        text = cell_text.strip()
+        
+        # Handle special cases first
+        text_upper = text.upper()
+        if 'BREAK' in text_upper:
+            result['subject'] = 'BREAK'
+            result['type'] = 'break'
+            return result
+        elif 'LIBRARY' in text_upper:
+            result['subject'] = 'LIBRARY'
+            result['type'] = 'library'
+            return result
+        
+        # Extract faculty with improved pattern
+        faculty_patterns = [
+            r'\[([A-Z]{2,4})\]',
+            r'\(([A-Z]{2,4})\)',
+            r'\{([A-Z]{2,4})\}'
+        ]
+        
+        for pattern in faculty_patterns:
+            faculty_matches = re.findall(pattern, text)
+            if faculty_matches:
+                raw_faculty = faculty_matches[0]
+                result['faculty'] = self.correct_faculty_ocr(raw_faculty)
+                text = re.sub(pattern, '', text)
+                break
+        
+        # Extract room with comprehensive patterns
+        room_patterns = [
+            r'(CR|CL|TR|CC|LAB)[-\s]*(\d+)',
+            r'LAB\s+L(\d+)[-]*([A-Z]*)',
+            r'(CL|TR)[-\s]*([A-Z]+)[-\s]*Lab'
+        ]
+        
+        for pattern in room_patterns:
+            room_matches = re.findall(pattern, text, re.IGNORECASE)
+            if room_matches:
+                if isinstance(room_matches[0], tuple):
+                    if len(room_matches[0]) == 2:
+                        prefix, number = room_matches[0]
+                        result['room'] = f"{prefix.upper()}-{number}"
+                    else:
+                        result['room'] = ''.join(room_matches[0])
+                else:
+                    result['room'] = room_matches[0]
+                text = re.sub(pattern, '', text, flags=re.IGNORECASE)
+                break
+        
+        # Extract batch
+        batch_patterns = [r'\b([A-Z]\d+)\b', r'\b(B\d+)\b']
+        for pattern in batch_patterns:
+            batch_matches = re.findall(pattern, text)
+            if batch_matches:
+                result['batch'] = batch_matches[0]
+                text = re.sub(pattern, '', text)
+                break
+        
+        # Clean remaining text for subject
+        text = re.sub(r'[^\w&\s]', ' ', text)
+        text = ' '.join(text.split())  # Normalize whitespace
+        
+        if text:
+            result['subject'] = self.correct_subject_ocr(text.upper())
+        else:
+            result['subject'] = 'UNKNOWN'
+        
+        # Determine type
+        if 'LAB' in result['room'].upper() or 'LAB' in result['subject'].upper():
+            result['type'] = 'lab'
+        
+        return result
+
+    def correct_faculty_ocr(self, faculty_text):
+        """Correct common OCR errors in faculty codes"""
+        corrections = {
+            'DDA': ['DDA', 'DOA', 'DQA', 'ODA'],
+            'VGO': ['VGO', 'VG0', 'VCO', 'VGQ', 'VG6'],
+            'CRO': ['CRO', 'CR0', 'CRQ', 'CR6'],
+            'VSG': ['VSG', 'VSC', 'VGG', 'V5G'],
+            'MNA': ['MNA', 'MNQ', 'MNX', 'MNA'],
+            'JGO': ['JGO', 'JG0', 'JCO', 'JG6'],
+            'KPA': ['KPA', 'KPQ', 'KPX', 'KPA'],
+            'NGU': ['NGU', 'NCU', 'NGL', 'NGU']
+        }
+        
+        for correct, variants in corrections.items():
+            if faculty_text in variants:
+                return correct
+        return faculty_text
+
+    def correct_subject_ocr(self, subject_text):
+        """Correct common OCR errors in subjects"""
+        corrections = {
+            'DSA': ['DSA', 'OSA', 'DSX', 'D5A'],
+            'DLD': ['DLD', 'OLD', 'DLO', 'DL0'],
+            'DM': ['DM', 'OM', 'DN', '0M'],
+            'PEM': ['PEM', 'PEW', 'PEN', 'PE1V1'],
+            'CN': ['CN', 'CO', 'GN', 'C1V1'],
+            'P&S': ['P&S', 'PAS', 'P S', 'P+S', 'PES'],
+            'TC': ['TC', 'TG', 'TO', 'T6']
+        }
+        
+        # Direct match
+        for correct, variants in corrections.items():
+            if subject_text in variants:
+                return correct
+        
+        # Partial match
+        for correct, variants in corrections.items():
+            if any(variant in subject_text for variant in variants):
+                return correct
+        
+        return subject_text
+
+    def save_final_results(self, entries, filename="final_timetable.json"):
+        """Save final results with comprehensive data"""
+        
+        # Calculate comprehensive statistics
+        stats = {
+            'total_entries': len(entries),
+            'entries_by_day': {},
+            'entries_by_type': {},
+            'entries_by_time': {},
+            'unique_subjects': len(set(e['subject'] for e in entries if e['subject'])),
+            'unique_faculties': len(set(e['faculty'] for e in entries if e['faculty'])),
+            'unique_rooms': len(set(e['room'] for e in entries if e['room'])),
+            'coverage_analysis': {}
+        }
+        
+        # Count by day
+        for day in self.days:
+            day_entries = [e for e in entries if e['day'] == day]
+            stats['entries_by_day'][day] = len(day_entries)
+        
+        # Count by type
+        for entry_type in ['lecture', 'lab', 'break', 'library', 'free']:
+            type_entries = [e for e in entries if e['type'] == entry_type]
+            stats['entries_by_type'][entry_type] = len(type_entries)
+        
+        # Count by time
+        for time_slot in self.time_slots:
+            time_entries = [e for e in entries if e['time'] == time_slot]
+            stats['entries_by_time'][time_slot] = len(time_entries)
+        
+        # Coverage analysis
+        total_possible = len(self.days) * len(self.time_slots)
+        stats['coverage_analysis'] = {
+            'total_possible_slots': total_possible,
+            'filled_slots': len(entries),
+            'coverage_percentage': round((len(entries) / total_possible) * 100, 1)
+        }
+        
+        data = {
+            "app_info": {
+                "name": "Final Optimized Timetable Extractor",
+                "version": "3.0",
+                "extraction_date": datetime.now().isoformat(),
+                "method": "Advanced Tesseract OCR with Coordinate Mapping"
+            },
+            "extraction_stats": stats,
+            "schedule": entries
+        }
+        
+        with open(filename, 'w') as f:
+            json.dump(data, f, indent=2)
+        
+        print(f"💾 Final results saved to {filename}")
+        return data
+
+def main():
+    IMAGE_PATH = "test4.jpg"
+    
+    if not os.path.exists(IMAGE_PATH):
+        print(f"❌ Image not found: {IMAGE_PATH}")
+        return
+    
+    extractor = FinalTimetableExtractor()
+    
+    if not extractor.tesseract_available:
+        print("❌ Please install Tesseract OCR")
+        return
+    
+    # Extract with final optimized method
+    entries = extractor.extract_with_refined_approach(IMAGE_PATH)
+    
+    if entries:
+        result_data = extractor.save_final_results(entries)
+        
+        print(f"\n🎉 FINAL EXTRACTION COMPLETED!")
+        print("=" * 60)
+        print(f"📊 Total entries: {result_data['extraction_stats']['total_entries']}")
+        print(f"📈 Coverage: {result_data['extraction_stats']['coverage_analysis']['coverage_percentage']}%")
+        print(f"📚 Unique subjects: {result_data['extraction_stats']['unique_subjects']}")
+        print(f"👨‍🏫 Unique faculties: {result_data['extraction_stats']['unique_faculties']}")
+        print(f"🏫 Unique rooms: {result_data['extraction_stats']['unique_rooms']}")
+        
+        print(f"\n📅 Daily distribution:")
+        for day, count in result_data['extraction_stats']['entries_by_day'].items():
+            print(f"   {day}: {count} entries")
+        
+        print(f"\n📋 All extracted entries:")
+        for entry in entries:
+            type_icon = {'lecture': '📚', 'lab': '🔬', 'break': '🍽️', 'library': '📖'}.get(entry['type'], '📚')
+            faculty_str = f" [{entry['faculty']}]" if entry['faculty'] else ""
+            room_str = f" @ {entry['room']}" if entry['room'] else ""
+            batch_str = f" ({entry['batch']})" if entry['batch'] else ""
+            print(f"   {type_icon} {entry['day']} {entry['time']}: {entry['subject']}{faculty_str}{room_str}{batch_str}")
+    else:
+        print("❌ No entries extracted")
+
+if __name__ == "__main__":
+    main()

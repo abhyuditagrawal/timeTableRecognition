@@ -1,0 +1,387 @@
+import cv2
+import pytesseract
+import pandas as pd
+import numpy as np
+from PIL import Image
+import re
+import json
+from dataclasses import dataclass, asdict
+from typing import List, Dict, Optional, Tuple
+
+@dataclass
+class LectureInfo:
+    """Data class to store lecture information"""
+    day: str
+    time_slot: str
+    subject: str
+    faculty: str
+    classroom: str
+    batch: str
+    lecture_type: str  # LAB, BREAK, LIBRARY, etc.
+
+class TimetableAnalyzer:
+    def __init__(self):
+        # Define time slots based on your timetable
+        self.time_slots = [
+            "8:00-9:00", "9:00-10:00", "10:00-11:00", "11:00-12:00",
+            "12:00-1:00", "1:00-2:00", "2:00-3:00", "3:00-4:00", "4:00-5:00", "5:00-6:00"
+        ]
+        
+        self.days = ["Monday", "Tuesday", "Wednesday", "Thursday"]
+        
+        # Common patterns in your timetable
+        self.subject_codes = ["DSA", "DM", "PEM", "DLD", "P&S", "CN"]
+        self.faculty_patterns = [
+            r'\[([A-Z]{2,4})\]',  # Faculty initials in brackets like [DDA], [CRO]
+        ]
+        self.classroom_patterns = [
+            r'(CR-\d+)',          # Classroom like CR-401, CR-403
+            r'(TR-\d+)',          # Training room like TR-501
+            r'(CL-\d+)',          # Computer lab like CL-705, CL-803
+            r'(CC-\d+)',          # Computer center like CC-801
+            r'(LAB L\d+-IT)',     # Lab patterns like LAB L2-IT
+            r'(CL-[A-Z]+ Lab)',   # Lab patterns like CL-DE Lab, CL-AI Lab
+        ]
+        self.batch_patterns = [
+            r'\b(B[1-2])\b',      # Batch patterns like B1, B2
+        ]
+
+    def preprocess_image(self, image_path: str) -> np.ndarray:
+        """Preprocess the image for better OCR results"""
+        # Read image
+        img = cv2.imread(image_path)
+        
+        # Convert to grayscale
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        
+        # Apply threshold to get better contrast
+        _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        
+        # Remove noise
+        denoised = cv2.medianBlur(thresh, 3)
+        
+        return denoised
+
+    def extract_text_from_image(self, image_path: str) -> str:
+        """Extract text from the timetable image using OCR"""
+        try:
+            # Preprocess image
+            processed_img = self.preprocess_image(image_path)
+            
+            # Convert to PIL Image for pytesseract
+            pil_img = Image.fromarray(processed_img)
+            
+            # Extract text using OCR
+            custom_config = r'--oem 3 --psm 6'
+            text = pytesseract.image_to_string(pil_img, config=custom_config)
+            
+            return text
+        except Exception as e:
+            print(f"Error extracting text from image: {e}")
+            return ""
+
+    def extract_table_data(self, image_path: str) -> Dict:
+        """Extract structured data from timetable image"""
+        try:
+            # Preprocess image
+            processed_img = self.preprocess_image(image_path)
+            
+            # Get bounding boxes for each text element
+            data = pytesseract.image_to_data(processed_img, output_type=pytesseract.Output.DICT)
+            
+            # Group text by position to identify cells
+            cells = self._group_text_by_position(data)
+            
+            return cells
+        except Exception as e:
+            print(f"Error extracting table data: {e}")
+            return {}
+
+    def _group_text_by_position(self, ocr_data: Dict) -> Dict:
+        """Group OCR text by position to identify table cells"""
+        cells = {}
+        
+        n_boxes = len(ocr_data['text'])
+        for i in range(n_boxes):
+            if int(ocr_data['conf'][i]) > 30:  # Filter low confidence text
+                text = ocr_data['text'][i].strip()
+                if text:
+                    x = ocr_data['left'][i]
+                    y = ocr_data['top'][i]
+                    w = ocr_data['width'][i]
+                    h = ocr_data['height'][i]
+                    
+                    # Use position to create a key for grouping
+                    cell_key = f"{y//50}_{x//100}"  # Approximate cell grouping
+                    
+                    if cell_key not in cells:
+                        cells[cell_key] = []
+                    cells[cell_key].append({
+                        'text': text,
+                        'x': x, 'y': y, 'w': w, 'h': h,
+                        'confidence': ocr_data['conf'][i]
+                    })
+        
+        return cells
+
+    def parse_lecture_info(self, text: str) -> LectureInfo:
+        """Parse lecture information from extracted text"""
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        
+        # Initialize variables
+        subject = ""
+        faculty = ""
+        classroom = ""
+        batch = ""
+        lecture_type = ""
+        
+        # Check for special cases first
+        if "BREAK" in text.upper():
+            return LectureInfo("", "", "BREAK", "", "", "", "BREAK")
+        elif "LIBRARY" in text.upper():
+            return LectureInfo("", "", "LIBRARY", "", "", "", "LIBRARY")
+        
+        # Extract information using patterns
+        full_text = " ".join(lines)
+        
+        # Extract subject (usually first line or recognizable code)
+        for subject_code in self.subject_codes:
+            if subject_code in full_text:
+                subject = subject_code
+                break
+        
+        # Extract faculty initials
+        for pattern in self.faculty_patterns:
+            matches = re.findall(pattern, full_text)
+            if matches:
+                faculty = matches[0]
+                break
+        
+        # Extract classroom
+        for pattern in self.classroom_patterns:
+            matches = re.findall(pattern, full_text)
+            if matches:
+                classroom = matches[0]
+                break
+        
+        # Extract batch
+        for pattern in self.batch_patterns:
+            matches = re.findall(pattern, full_text)
+            if matches:
+                batch = matches[0]
+                break
+        
+        # Determine lecture type
+        if "LAB" in full_text.upper():
+            lecture_type = "LAB"
+        elif any(code in full_text for code in self.subject_codes):
+            lecture_type = "LECTURE"
+        else:
+            lecture_type = "OTHER"
+        
+        return LectureInfo("", "", subject, faculty, classroom, batch, lecture_type)
+
+    def analyze_timetable(self, image_path: str) -> Dict:
+        """Main method to analyze the complete timetable and return structured JSON"""
+        timetable_data = {
+            "metadata": {
+                "total_lectures": 0,
+                "total_labs": 0,
+                "total_breaks": 0,
+                "extraction_method": "OCR with pattern matching"
+            },
+            "schedule": {},
+            "raw_lectures": []
+        }
+        
+        # Initialize schedule structure
+        for day in self.days:
+            timetable_data["schedule"][day] = {}
+            for time_slot in self.time_slots:
+                timetable_data["schedule"][day][time_slot] = None
+        
+        # Method 1: Extract structured data using table detection
+        table_data = self.extract_table_data(image_path)
+        
+        # Method 2: Extract raw text and parse
+        raw_text = self.extract_text_from_image(image_path)
+        
+        print("Extracted raw text:")
+        print(raw_text)
+        print("\n" + "="*50 + "\n")
+        
+        # Parse the raw text into lecture blocks
+        lecture_blocks = self._identify_lecture_blocks(raw_text)
+        
+        lectures = []
+        for block in lecture_blocks:
+            lecture_info = self.parse_lecture_info(block)
+            if lecture_info.subject or lecture_info.lecture_type:
+                lectures.append(lecture_info)
+        
+        # Convert lectures to JSON format
+        for lecture in lectures:
+            lecture_dict = asdict(lecture)
+            timetable_data["raw_lectures"].append(lecture_dict)
+        
+        # Update metadata
+        timetable_data["metadata"]["total_lectures"] = len([l for l in lectures if l.lecture_type == "LECTURE"])
+        timetable_data["metadata"]["total_labs"] = len([l for l in lectures if l.lecture_type == "LAB"])
+        timetable_data["metadata"]["total_breaks"] = len([l for l in lectures if l.lecture_type == "BREAK"])
+        
+        return timetable_data
+
+    def _identify_lecture_blocks(self, text: str) -> List[str]:
+        """Identify individual lecture blocks from the raw text"""
+        # Split text into potential lecture blocks
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        
+        blocks = []
+        current_block = []
+        
+        for line in lines:
+            # Check if line might start a new lecture block
+            if (any(subject in line for subject in self.subject_codes) or 
+                "BREAK" in line.upper() or "LIBRARY" in line.upper()):
+                
+                if current_block:
+                    blocks.append('\n'.join(current_block))
+                    current_block = []
+                
+                current_block.append(line)
+            elif current_block:  # Continue adding to current block
+                current_block.append(line)
+        
+        # Add the last block
+        if current_block:
+            blocks.append('\n'.join(current_block))
+        
+        return blocks
+
+    def create_structured_json(self, timetable_data: Dict) -> Dict:
+        """Create a more structured JSON with day-wise and time-wise organization"""
+        structured_json = {
+            "timetable": {
+                "semester": "III",
+                "course": "Computer Engineering",
+                "metadata": timetable_data["metadata"],
+                "weekly_schedule": {}
+            }
+        }
+        
+        # Initialize weekly schedule
+        for day in self.days:
+            structured_json["timetable"]["weekly_schedule"][day] = []
+        
+        # Try to map lectures to time slots (this would need enhancement based on OCR accuracy)
+        for lecture_dict in timetable_data["raw_lectures"]:
+            # For now, add to a general list since time slot detection needs improvement
+            day_assigned = False
+            for day in self.days:
+                if not day_assigned:  # Simple assignment for demonstration
+                    structured_json["timetable"]["weekly_schedule"][day].append({
+                        "time_slot": "TBD",  # To be determined from better OCR
+                        "subject": lecture_dict["subject"],
+                        "faculty": lecture_dict["faculty"],
+                        "classroom": lecture_dict["classroom"],
+                        "batch": lecture_dict["batch"],
+                        "type": lecture_dict["lecture_type"]
+                    })
+                    day_assigned = True
+                    break
+        
+        return structured_json
+
+    def save_json_results(self, timetable_data: Dict, output_file: str = "timetable_analysis.json"):
+        """Save the analysis results to a JSON file"""
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(timetable_data, f, indent=2, ensure_ascii=False)
+        print(f"Results saved to {output_file}")
+    
+    def get_timetable_json(self, image_path: str) -> str:
+        """Get timetable data as JSON string"""
+        timetable_data = self.analyze_timetable(image_path)
+        return json.dumps(timetable_data, indent=2, ensure_ascii=False)
+
+# Example usage
+if __name__ == "__main__":
+    # Create analyzer instance
+    analyzer = TimetableAnalyzer()
+    
+    # Analyze timetable
+    image_path = "test4.jpg"
+    
+    try:
+        # Analyze the timetable and get JSON data
+        timetable_json_data = analyzer.analyze_timetable(image_path)
+        
+        print("Extracted Timetable JSON:")
+        print("=" * 50)
+        print(json.dumps(timetable_json_data, indent=2))
+        
+        # Create structured JSON
+        structured_json = analyzer.create_structured_json(timetable_json_data)
+        print("\nStructured Weekly Schedule JSON:")
+        print("=" * 50)
+        print(json.dumps(structured_json, indent=2))
+        
+        # Save JSON results
+        analyzer.save_json_results(timetable_json_data, "timetable_raw.json")
+        analyzer.save_json_results(structured_json, "timetable_structured.json")
+        
+        # Get as JSON string (for API responses, etc.)
+        json_string = analyzer.get_timetable_json(image_path)
+        print(f"\nJSON String length: {len(json_string)} characters")
+        
+        # Display summary
+        print(f"\nSummary:")
+        print(f"Total Lectures: {timetable_json_data['metadata']['total_lectures']}")
+        print(f"Total Labs: {timetable_json_data['metadata']['total_labs']}")
+        print(f"Total Breaks: {timetable_json_data['metadata']['total_breaks']}")
+        print(f"Raw Entries Extracted: {len(timetable_json_data['raw_lectures'])}")
+        
+    except FileNotFoundError:
+        print("Image file 'test4.jpg' not found in the current directory.")
+        print("Please make sure the file exists and is in the same folder as this script.")
+        
+        # Example of expected JSON output structure
+        example_output = {
+            "metadata": {
+                "total_lectures": 8,
+                "total_labs": 4,
+                "total_breaks": 2,
+                "extraction_method": "OCR with pattern matching"
+            },
+            "schedule": {
+                "Monday": {
+                    "8:00-9:00": None,
+                    "9:00-10:00": None,
+                    "2:00-3:00": {
+                        "subject": "DSA",
+                        "faculty": "DDA",
+                        "classroom": "CL-DE Lab",
+                        "batch": "B1",
+                        "type": "LAB"
+                    }
+                }
+            },
+            "raw_lectures": [
+                {
+                    "day": "",
+                    "time_slot": "",
+                    "subject": "DSA",
+                    "faculty": "DDA",
+                    "classroom": "CR-401",
+                    "batch": "B2",
+                    "lecture_type": "LECTURE"
+                }
+            ]
+        }
+        print("\nExample JSON Output Structure:")
+        print(json.dumps(example_output, indent=2))
+        
+    except Exception as e:
+        print(f"Error analyzing timetable: {e}")
+        print("Make sure you have installed the required libraries:")
+        print("pip install opencv-python pytesseract pandas pillow numpy")
+        print("Also ensure Tesseract OCR is installed on your system.")

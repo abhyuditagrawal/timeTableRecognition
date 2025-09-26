@@ -1,0 +1,365 @@
+import cv2
+import pytesseract
+import numpy as np
+from PIL import Image
+import re
+import json
+from dataclasses import dataclass, asdict
+from typing import List, Dict, Optional, Tuple
+import pandas as pd
+
+@dataclass
+class LectureInfo:
+    """Data class to store lecture information"""
+    day: str
+    time_slot: str
+    subject: str
+    faculty: str
+    classroom: str
+    batch: str
+    lecture_type: str
+
+class ImprovedTimetableAnalyzer:
+    def __init__(self):
+        # Define exact time slots from your timetable
+        self.time_slots = [
+            "8:00-9:00", "9:00-10:00", "10:00-11:00", "11:00-12:00",
+            "12:00-1:00", "1:00-2:00", "2:00-3:00", "3:00-4:00", "4:00-5:00"
+        ]
+        
+        self.days = ["Monday", "Tuesday", "Wednesday", "Thursday"]
+        
+        # Enhanced patterns based on your actual timetable
+        self.subject_codes = ["DSA", "DM", "PEM", "DLD", "P&S", "CN"]
+        self.faculty_patterns = [
+            r'\[([A-Z]{2,4})\]',  # [DDA], [CRO], [VSG], etc.
+        ]
+        self.classroom_patterns = [
+            r'(CR-\d+)',          # CR-401, CR-403, CR-405, CR-507
+            r'(TR-\d+)',          # TR-501
+            r'(CL-\d+)',          # CL-705, CL-803
+            r'(CC-\d+)',          # CC-801
+            r'(LAB L\d+-IT)',     # LAB L2-IT, LAB L3-IT
+            r'(CL-[A-Z]+ Lab)',   # CL-DE Lab, CL-AI Lab
+        ]
+        self.batch_patterns = [
+            r'\b(B[1-2])\b',      # B1, B2
+        ]
+
+    def preprocess_image_for_table(self, image_path: str) -> np.ndarray:
+        """Enhanced preprocessing for table structure detection"""
+        # Read image
+        img = cv2.imread(image_path)
+        original = img.copy()
+        
+        # Convert to grayscale
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        
+        # Apply adaptive threshold for better table line detection
+        adaptive_thresh = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 15, 10
+        )
+        
+        # Detect horizontal and vertical lines
+        horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (40, 1))
+        vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 40))
+        
+        horizontal_lines = cv2.morphologyEx(adaptive_thresh, cv2.MORPH_OPEN, horizontal_kernel)
+        vertical_lines = cv2.morphologyEx(adaptive_thresh, cv2.MORPH_OPEN, vertical_kernel)
+        
+        # Combine lines to get table structure
+        table_structure = cv2.addWeighted(horizontal_lines, 0.5, vertical_lines, 0.5, 0.0)
+        
+        return gray, table_structure, original
+
+    def detect_table_cells(self, image_path: str) -> List[Dict]:
+        """Detect individual table cells using contour detection"""
+        gray, table_structure, original = self.preprocess_image_for_table(image_path)
+        
+        # Find contours of table cells
+        contours, _ = cv2.findContours(table_structure, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        cells = []
+        for contour in contours:
+            x, y, w, h = cv2.boundingRect(contour)
+            # Filter out very small contours
+            if w > 50 and h > 20:
+                cells.append({
+                    'x': x, 'y': y, 'w': w, 'h': h,
+                    'center_x': x + w//2, 'center_y': y + h//2
+                })
+        
+        # Sort cells by position (top to bottom, left to right)
+        cells.sort(key=lambda c: (c['y'], c['x']))
+        
+        return cells
+
+    def extract_cell_content(self, image_path: str, cell: Dict) -> str:
+        """Extract text content from a specific cell"""
+        # Read original image
+        img = cv2.imread(image_path)
+        
+        # Extract cell region with some padding
+        padding = 5
+        x = max(0, cell['x'] - padding)
+        y = max(0, cell['y'] - padding)
+        w = min(img.shape[1] - x, cell['w'] + 2*padding)
+        h = min(img.shape[0] - y, cell['h'] + 2*padding)
+        
+        cell_img = img[y:y+h, x:x+w]
+        
+        # Convert to grayscale and apply threshold
+        gray_cell = cv2.cvtColor(cell_img, cv2.COLOR_BGR2GRAY)
+        _, thresh_cell = cv2.threshold(gray_cell, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        
+        # Extract text using OCR
+        custom_config = r'--oem 3 --psm 7 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz[]()-:&/'
+        text = pytesseract.image_to_string(thresh_cell, config=custom_config).strip()
+        
+        return text
+
+    def map_cells_to_grid(self, cells: List[Dict], image_path: str) -> Dict:
+        """Map detected cells to timetable grid structure"""
+        # Get image dimensions for reference
+        img = cv2.imread(image_path)
+        img_height, img_width = img.shape[:2]
+        
+        # Approximate grid mapping based on image regions
+        grid_data = {}
+        
+        # Define approximate boundaries for your timetable layout
+        # These values might need adjustment based on your specific image
+        time_col_width = img_width // 6  # First column for time
+        day_col_width = (img_width - time_col_width) // 4  # 4 day columns
+        row_height = img_height // (len(self.time_slots) + 1)  # +1 for header
+        
+        for cell in cells:
+            # Extract cell content
+            content = self.extract_cell_content(image_path, cell)
+            if not content:
+                continue
+            
+            # Determine grid position
+            col = min(4, cell['center_x'] // (img_width // 5))  # 0=time, 1-4=days
+            row = min(len(self.time_slots), max(0, (cell['center_y'] - row_height//2) // row_height))
+            
+            # Skip header row and time column for now
+            if row > 0 and col > 0:
+                day_index = col - 1
+                time_index = row - 1
+                
+                if day_index < len(self.days) and time_index < len(self.time_slots):
+                    day = self.days[day_index]
+                    time_slot = self.time_slots[time_index]
+                    
+                    key = f"{day}_{time_slot}"
+                    grid_data[key] = {
+                        'day': day,
+                        'time_slot': time_slot,
+                        'content': content,
+                        'position': {'x': cell['x'], 'y': cell['y']}
+                    }
+        
+        return grid_data
+
+    def parse_cell_content(self, content: str, day: str, time_slot: str) -> LectureInfo:
+        """Parse individual cell content into structured data"""
+        if not content or len(content.strip()) < 2:
+            return None
+            
+        # Clean the content
+        content = content.replace('\n', ' ').strip()
+        
+        # Initialize variables
+        subject = ""
+        faculty = ""
+        classroom = ""
+        batch = ""
+        lecture_type = ""
+        
+        # Check for special cases
+        content_upper = content.upper()
+        if "BREAK" in content_upper:
+            return LectureInfo(day, time_slot, "BREAK", "", "", "", "BREAK")
+        elif "LIBRARY" in content_upper:
+            return LectureInfo(day, time_slot, "LIBRARY", "", "", "", "LIBRARY")
+        
+        # Extract subject
+        for subject_code in self.subject_codes:
+            if subject_code in content:
+                subject = subject_code
+                break
+        
+        # Extract faculty (in brackets)
+        faculty_matches = re.findall(r'\[([A-Z]{2,4})\]', content)
+        if faculty_matches:
+            faculty = faculty_matches[0]
+        
+        # Extract classroom
+        for pattern in self.classroom_patterns:
+            matches = re.findall(pattern, content)
+            if matches:
+                classroom = matches[0]
+                break
+        
+        # Extract batch
+        batch_matches = re.findall(r'\b(B[1-2])\b', content)
+        if batch_matches:
+            batch = batch_matches[0]
+        
+        # Determine lecture type
+        if "LAB" in content_upper:
+            lecture_type = "LAB"
+        elif subject:
+            lecture_type = "LECTURE"
+        else:
+            lecture_type = "OTHER"
+        
+        # Only return if we found meaningful data
+        if subject or lecture_type in ["BREAK", "LIBRARY"]:
+            return LectureInfo(day, time_slot, subject, faculty, classroom, batch, lecture_type)
+        
+        return None
+
+    def analyze_timetable_improved(self, image_path: str) -> Dict:
+        """Improved timetable analysis with proper grid mapping"""
+        
+        # Initialize the result structure
+        timetable_data = {
+            "metadata": {
+                "total_lectures": 0,
+                "total_labs": 0,
+                "total_breaks": 0,
+                "extraction_method": "OCR with table structure detection"
+            },
+            "schedule": {},
+            "raw_lectures": []
+        }
+        
+        # Initialize schedule structure
+        for day in self.days:
+            timetable_data["schedule"][day] = {}
+            for time_slot in self.time_slots:
+                timetable_data["schedule"][day][time_slot] = None
+        
+        try:
+            # Method 1: Try table cell detection
+            print("Detecting table cells...")
+            cells = self.detect_table_cells(image_path)
+            print(f"Found {len(cells)} potential cells")
+            
+            # Method 2: Map cells to grid
+            print("Mapping cells to grid...")
+            grid_data = self.map_cells_to_grid(cells, image_path)
+            print(f"Mapped {len(grid_data)} grid cells")
+            
+            # Process each mapped cell
+            lectures = []
+            for key, cell_info in grid_data.items():
+                lecture_info = self.parse_cell_content(
+                    cell_info['content'], 
+                    cell_info['day'], 
+                    cell_info['time_slot']
+                )
+                
+                if lecture_info:
+                    lectures.append(lecture_info)
+                    # Add to structured schedule
+                    timetable_data["schedule"][lecture_info.day][lecture_info.time_slot] = {
+                        "subject": lecture_info.subject,
+                        "faculty": lecture_info.faculty,
+                        "classroom": lecture_info.classroom,
+                        "batch": lecture_info.batch,
+                        "type": lecture_info.lecture_type
+                    }
+            
+            # Convert to raw lectures format
+            for lecture in lectures:
+                timetable_data["raw_lectures"].append(asdict(lecture))
+            
+            # Update metadata
+            timetable_data["metadata"]["total_lectures"] = len([l for l in lectures if l.lecture_type == "LECTURE"])
+            timetable_data["metadata"]["total_labs"] = len([l for l in lectures if l.lecture_type == "LAB"])
+            timetable_data["metadata"]["total_breaks"] = len([l for l in lectures if l.lecture_type == "BREAK"])
+            
+        except Exception as e:
+            print(f"Error in improved analysis: {e}")
+            # Fallback to basic OCR
+            print("Falling back to basic OCR...")
+            return self.fallback_ocr_analysis(image_path)
+        
+        return timetable_data
+
+    def fallback_ocr_analysis(self, image_path: str) -> Dict:
+        """Fallback method using basic OCR when table detection fails"""
+        
+        timetable_data = {
+            "metadata": {
+                "total_lectures": 0,
+                "total_labs": 0,
+                "total_breaks": 0,
+                "extraction_method": "Basic OCR fallback"
+            },
+            "schedule": {},
+            "raw_lectures": [],
+            "extracted_text": ""
+        }
+        
+        # Initialize schedule
+        for day in self.days:
+            timetable_data["schedule"][day] = {}
+            for time_slot in self.time_slots:
+                timetable_data["schedule"][day][time_slot] = None
+        
+        # Basic OCR extraction
+        img = cv2.imread(image_path)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        text = pytesseract.image_to_string(gray)
+        timetable_data["extracted_text"] = text
+        
+        print("Extracted text:")
+        print(text)
+        
+        return timetable_data
+
+    def save_json_results(self, timetable_data: Dict, output_file: str):
+        """Save results to JSON file"""
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(timetable_data, f, indent=2, ensure_ascii=False)
+        print(f"Results saved to {output_file}")
+
+# Example usage
+if __name__ == "__main__":
+    analyzer = ImprovedTimetableAnalyzer()
+    image_path = "test4.jpg"
+    
+    try:
+        print("Starting improved timetable analysis...")
+        timetable_data = analyzer.analyze_timetable_improved(image_path)
+        
+        print("\nExtracted Timetable Data:")
+        print("=" * 50)
+        print(json.dumps(timetable_data, indent=2))
+        
+        # Save results
+        analyzer.save_json_results(timetable_data, "improved_timetable.json")
+        
+        # Print summary
+        print(f"\nAnalysis Summary:")
+        print(f"Total Lectures: {timetable_data['metadata']['total_lectures']}")
+        print(f"Total Labs: {timetable_data['metadata']['total_labs']}")
+        print(f"Total Breaks: {timetable_data['metadata']['total_breaks']}")
+        
+        # Show non-empty schedule entries
+        print(f"\nScheduled Classes:")
+        for day in analyzer.days:
+            for time_slot in analyzer.time_slots:
+                entry = timetable_data["schedule"][day][time_slot]
+                if entry:
+                    print(f"{day} {time_slot}: {entry['subject']} [{entry['faculty']}] {entry['classroom']} {entry['batch']}")
+        
+    except FileNotFoundError:
+        print("Image file 'test4.jpg' not found.")
+    except Exception as e:
+        print(f"Error: {e}")
+        print("Make sure you have installed: pip install opencv-python pytesseract pandas pillow numpy")

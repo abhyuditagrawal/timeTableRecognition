@@ -1,0 +1,837 @@
+{
+  "schedule": {
+    "Monday": {
+      "8:00-9:00": null,
+      "9:00-10:00": null,
+      "10:00-11:00": null,
+      "11:00-12:00": null,
+      "12:00-1:00": null,
+      "1:00-2:00": null,
+      "2:00-3:00": {
+        "subject": "CN",
+        "faculty": "GO",
+        "classroom": "",
+        "batch": "",
+        "type": "LECTURE"
+      },
+      "3:00-4:00": null,
+      "4:00-5:00": {
+        "subject": "DLD",
+        "faculty": "",
+        "classroom": "",
+        "batch": "",
+        "type": "LECTURE"
+      },
+      "5:00-6:00": null
+    },
+    "Tuesday": {
+      "8:00-9:00": {
+        "subject": "DSA",
+        "faculty": "DDA",
+        "classroom": "",
+        "batch": "B2",
+        "type": "LECTURE"
+      },
+      "9:00-10:00": null,
+      "10:00-11:00": {
+        "subject": "LIBRARY",
+        "faculty": "",
+        "classroom": "",
+        "batch": "",
+        "type": "LIBRARY"
+      },
+      "11:00-12:00": {
+        "subject": "P&S",
+        "faculty": "",
+        "classroom": "TR-501",
+        "batch": "",
+        "type": "LECTURE"
+      },
+      "12:00-1:00": null,
+      "1:00-2:00": {
+        "subject": "BREAK",
+        "faculty": "",
+        "classroom": "",
+        "batch": "",
+        "type": "BREAK"
+      },
+      "2:00-3:00": {
+        "subject": "CN",
+        "faculty": "",
+        "classroom": "",
+        "batch": "",
+        "type": "LECTURE"
+      },
+      "3:00-4:00": null,
+      "4:00-5:00": null,
+      "5:00-6:00": null
+    },
+    "Wednesday": {
+      "8:00-9:00": null,
+      "9:00-10:00": null,
+      "10:00-11:00": {
+        "subject": "BREAK",
+        "faculty": "",
+        "classroom": "",
+        "batch": "",
+        "type": "BREAK"
+      },
+      "11:00-12:00": null,
+      "12:00-1:00": {
+        "subject": "P&S",
+        "faculty": "KPA",
+        "classroom": "",
+        "batch": "",
+        "type": "LECTURE"
+      },
+      "1:00-2:00": null,
+      "2:00-3:00": null,
+      "3:00-4:00": null,
+      "4:00-5:00": null,
+      "5:00-6:00": null
+    },
+    "Thursday": {
+      "8:00-9:00": null,
+      "9:00-10:00": null,
+      "10:00-11:00": null,
+      "11:00-12:00": {
+        "subject": "BREAK",
+        "faculty": "",
+        "classroom": "",
+        "batch": "",
+        "type": "BREAK"
+      },
+      "12:00-1:00": null,
+      "1:00-2:00": null,
+      "2:00-3:00": null,
+      "3:00-4:00": null,
+      "4:00-5:00": null,
+      "5:00-6:00": null
+    }
+  },
+  "raw_lectures": [
+    {
+      "day": "Monday",
+      "time_slots": [
+        "2:00-3:00"
+      ],
+      "subject": "CN",
+      "faculty": "GO",
+      "classroom": "",
+      "batch": "",
+      "lecture_type": "LECTURE"
+    },
+    {
+      "day": "Monday",
+      "time_slots": [
+        "4:00-5:00"
+      ],
+      "subject": "DLD",
+      "faculty": "",
+      "classroom": "",
+      "batch": "",
+      "lecture_type": "LECTURE"
+    },
+    {
+      "day": "Tuesday",
+      "time_slots": [
+        "8:00-9:00"
+      ],
+      "subject": "DSA",
+      "faculty": "DDA",
+      "classroom": "",
+      "batch": "B2",
+      "lecture_type": "LECTURE"
+    },
+    {
+      "day": "Tuesday",
+      "time_slots": [
+        "10:00-11:00"
+      ],
+      "subject": "LIBRARY",
+      "faculty": "",
+      "classroom": "",
+      "batch": "",
+      "lecture_type": "LIBRARY"
+    },
+    {
+      "day": "Tuesday",
+      "time_slots": [
+        "11:00-12:00"
+      ],
+      "subject": "P&S",
+      "faculty": "",
+      "classroom": "TR-501",
+      "batch": "",
+      "lecture_type": "LECTURE"
+    },
+    {
+      "day": "Tuesday",
+      "time_slots": [
+        "1:00-2:00"
+      ],
+      "subject": "BREAK",
+      "faculty": "",
+      "classroom": "",
+      "batch": "",
+      "lecture_type": "BREAK"
+    },
+    {
+      "day": "Tuesday",
+      "time_slots": [
+        "2:00-3:00"
+      ],
+      "subject": "CN",
+      "faculty": "",
+      "classroom": "",
+      "batch": "",
+      "lecture_type": "LECTURE"
+    },
+    {
+      "day": "Wednesday",
+      "time_slots": [
+        "10:00-11:00"
+      ],
+      "subject": "BREAK",
+      "faculty": "",
+      "classroom": "",
+      "batch": "",
+      "lecture_type": "BREAK"
+    },
+    {
+      "day": "Wednesday",
+      "time_slots": [
+        "12:00-1:00"
+      ],
+      "subject": "P&S",
+      "faculty": "KPA",
+      "classroom": "",
+      "batch": "",
+      "lecture_type": "LECTURE"
+    },
+    {
+      "day": "Thursday",
+      "time_slots": [
+        "11:00-12:00"
+      ],
+      "subject": "BREAK",
+      "faculty": "",
+      "classroom": "",
+      "batch": "",
+      "lecture_type": "BREAK"
+    }
+  ],
+  "debug_info": {
+    "regions_processed": 40,
+    "regions_with_content": 24,
+    "extracted_texts": [
+      {
+        "day": "Monday",
+        "time_slot": "8:00-9:00",
+        "region": [
+          236,
+          86,
+          514,
+          166
+        ],
+        "text": "ft",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Monday",
+        "time_slot": "9:00-10:00",
+        "region": [
+          236,
+          176,
+          514,
+          256
+        ],
+        "text": "|",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Monday",
+        "time_slot": "10:00-11:00",
+        "region": [
+          236,
+          266,
+          514,
+          346
+        ],
+        "text": "ft",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Monday",
+        "time_slot": "11:00-12:00",
+        "region": [
+          236,
+          356,
+          514,
+          436
+        ],
+        "text": "a",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Monday",
+        "time_slot": "12:00-1:00",
+        "region": [
+          236,
+          446,
+          514,
+          526
+        ],
+        "text": "—",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Monday",
+        "time_slot": "1:00-2:00",
+        "region": [
+          236,
+          536,
+          514,
+          616
+        ],
+        "text": "—",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Monday",
+        "time_slot": "2:00-3:00",
+        "region": [
+          236,
+          626,
+          514,
+          706
+        ],
+        "text": "A | CN |\nA) [Go] n",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Monday",
+        "time_slot": "3:00-4:00",
+        "region": [
+          236,
+          716,
+          514,
+          796
+        ],
+        "text": "B2\n2 Lab CL-705 CL",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Monday",
+        "time_slot": "4:00-5:00",
+        "region": [
+          236,
+          806,
+          514,
+          886
+        ],
+        "text": "DLD |\nla teal a * |",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Monday",
+        "time_slot": "5:00-6:00",
+        "region": [
+          236,
+          896,
+          514,
+          976
+        ],
+        "text": "BL\nCL-DE Lab",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Tuesday",
+        "time_slot": "8:00-9:00",
+        "region": [
+          524,
+          86,
+          802,
+          166
+        ],
+        "text": "DSA\n[DDA]\nB2",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Tuesday",
+        "time_slot": "9:00-10:00",
+        "region": [
+          524,
+          176,
+          802,
+          256
+        ],
+        "text": "LAS Lz-iT |",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Tuesday",
+        "time_slot": "10:00-11:00",
+        "region": [
+          524,
+          266,
+          802,
+          346
+        ],
+        "text": "LIBRARY |\nnip",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Tuesday",
+        "time_slot": "11:00-12:00",
+        "region": [
+          524,
+          356,
+          802,
+          436
+        ],
+        "text": "(VGO]\nTR-501\nP&S",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Tuesday",
+        "time_slot": "12:00-1:00",
+        "region": [
+          524,
+          446,
+          802,
+          526
+        ],
+        "text": "LMNA]\nCR-507 |",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Tuesday",
+        "time_slot": "1:00-2:00",
+        "region": [
+          524,
+          536,
+          802,
+          616
+        ],
+        "text": "BREAK |",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Tuesday",
+        "time_slot": "2:00-3:00",
+        "region": [
+          524,
+          626,
+          802,
+          706
+        ],
+        "text": "LD | CN |\nGO) ig(ere)|",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Tuesday",
+        "time_slot": "3:00-4:00",
+        "region": [
+          524,
+          716,
+          802,
+          796
+        ],
+        "text": "32 B)\nJE Lab LAB L3-IT",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Tuesday",
+        "time_slot": "4:00-5:00",
+        "region": [
+          524,
+          806,
+          802,
+          886
+        ],
+        "text": "OD",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Tuesday",
+        "time_slot": "5:00-6:00",
+        "region": [
+          524,
+          896,
+          802,
+          976
+        ],
+        "text": "en",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Wednesday",
+        "time_slot": "8:00-9:00",
+        "region": [
+          812,
+          86,
+          1090,
+          166
+        ],
+        "text": "[CRO]\nCR-40!",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Wednesday",
+        "time_slot": "9:00-10:00",
+        "region": [
+          812,
+          176,
+          1090,
+          256
+        ],
+        "text": "[DDA]\nCR-401",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Wednesday",
+        "time_slot": "10:00-11:00",
+        "region": [
+          812,
+          266,
+          1090,
+          346
+        ],
+        "text": "BREAK |\nNas",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Wednesday",
+        "time_slot": "11:00-12:00",
+        "region": [
+          812,
+          356,
+          1090,
+          436
+        ],
+        "text": "[CRO]\nCR~405",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Wednesday",
+        "time_slot": "12:00-1:00",
+        "region": [
+          812,
+          446,
+          1090,
+          526
+        ],
+        "text": "P&S P&S\n[KPA] [NGU]\nni p>",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Wednesday",
+        "time_slot": "1:00-2:00",
+        "region": [
+          812,
+          536,
+          1090,
+          616
+        ],
+        "text": "CL-803 | CL-AI Lab |",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Wednesday",
+        "time_slot": "2:00-3:00",
+        "region": [
+          812,
+          626,
+          1090,
+          706
+        ],
+        "text": "|",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Wednesday",
+        "time_slot": "3:00-4:00",
+        "region": [
+          812,
+          716,
+          1090,
+          796
+        ],
+        "text": "en",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Wednesday",
+        "time_slot": "4:00-5:00",
+        "region": [
+          812,
+          806,
+          1090,
+          886
+        ],
+        "text": "|",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Wednesday",
+        "time_slot": "5:00-6:00",
+        "region": [
+          812,
+          896,
+          1090,
+          976
+        ],
+        "text": "ee",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Thursday",
+        "time_slot": "8:00-9:00",
+        "region": [
+          1100,
+          86,
+          1378,
+          166
+        ],
+        "text": "|",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Thursday",
+        "time_slot": "9:00-10:00",
+        "region": [
+          1100,
+          176,
+          1378,
+          256
+        ],
+        "text": "[VSG]\nCR-403",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Thursday",
+        "time_slot": "10:00-11:00",
+        "region": [
+          1100,
+          266,
+          1378,
+          346
+        ],
+        "text": "[VSG]\nCR-403",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Thursday",
+        "time_slot": "11:00-12:00",
+        "region": [
+          1100,
+          356,
+          1378,
+          436
+        ],
+        "text": "BREAK |\nCN",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Thursday",
+        "time_slot": "12:00-1:00",
+        "region": [
+          1100,
+          446,
+          1378,
+          526
+        ],
+        "text": "[JGO}\nCR-405\nTac A",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Thursday",
+        "time_slot": "1:00-2:00",
+        "region": [
+          1100,
+          536,
+          1378,
+          616
+        ],
+        "text": "(DDA]\nCR-405",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Thursday",
+        "time_slot": "2:00-3:00",
+        "region": [
+          1100,
+          626,
+          1378,
+          706
+        ],
+        "text": "[CRO]\nBl\nCC-201",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Thursday",
+        "time_slot": "3:00-4:00",
+        "region": [
+          1100,
+          716,
+          1378,
+          796
+        ],
+        "text": "|",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Thursday",
+        "time_slot": "4:00-5:00",
+        "region": [
+          1100,
+          806,
+          1378,
+          886
+        ],
+        "text": "|",
+        "region_size": [
+          278,
+          80
+        ]
+      },
+      {
+        "day": "Thursday",
+        "time_slot": "5:00-6:00",
+        "region": [
+          1100,
+          896,
+          1378,
+          976
+        ],
+        "text": "|",
+        "region_size": [
+          278,
+          80
+        ]
+      }
+    ]
+  },
+  "metadata": {
+    "total_lectures": 6,
+    "total_labs": 0,
+    "total_breaks": 3,
+    "total_entries": 10,
+    "extraction_method": "Region-based extraction with enhanced OCR"
+  }
+}

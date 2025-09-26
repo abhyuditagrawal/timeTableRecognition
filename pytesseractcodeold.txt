@@ -1,0 +1,165 @@
+import os
+import json
+import pandas as pd
+import re
+import pytesseract
+from datetime import datetime
+
+
+class OptimizedTesseractExtractor:
+    def __init__(self):
+        print("🚀 Optimized Tesseract Extractor for clean image")
+        print("=" * 60)
+        try:
+            version = pytesseract.get_tesseract_version()
+            print(f"✅ Tesseract version: {version}")
+            self.tesseract_available = True
+        except Exception as e:
+            print(f"❌ Tesseract not found: {e}")
+            self.tesseract_available = False
+            return
+        self.tesseract_config = r'--oem 3'
+
+    def extract_with_multiple_psm(self, image_path):
+        print("🔍 Trying multiple Tesseract PSM modes...")
+        psm_modes = [6, 4, 3, 11, 12]
+        best_result = None
+        max_entries = 0
+        for psm in psm_modes:
+            print(f"   Processing with PSM={psm}")
+            try:
+                config = f'--psm {psm} {self.tesseract_config}'
+                data = pytesseract.image_to_data(
+                    image_path,
+                    config=config,
+                    output_type=pytesseract.Output.DICT
+                )
+                entries = self.process_tesseract_data(data)
+                if len(entries) > max_entries:
+                    max_entries = len(entries)
+                    best_result = entries
+                    print(f"   PSM={psm} produced {len(entries)} entries (best so far)")
+                else:
+                    print(f"   PSM={psm} produced {len(entries)} entries")
+            except Exception as e:
+                print(f"   PSM={psm} failed with error: {e}")
+        if best_result:
+            return best_result
+        else:
+            print("❌ All PSM modes failed to extract meaningful data")
+            return None
+
+    def process_tesseract_data(self, data):
+        text_blocks = []
+        for i, text in enumerate(data['text']):
+            if text.strip() and int(data['conf'][i]) > 30:
+                text_blocks.append({
+                    'text': text.strip(),
+                    'x': data['left'][i],
+                    'y': data['top'][i],
+                    'conf': int(data['conf'][i])
+                })
+        text_blocks.sort(key=lambda x: (x['y'], x['x']))
+        print(f"📝 Extracted {len(text_blocks)} text blocks")
+        # You can print sample blocks here if needed
+        return self.parse_text_blocks(text_blocks)
+
+    def parse_text_blocks(self, blocks):
+        days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+        times = ['8:00-9:00', '9:00-10:00', '10:00-11:00', '11:00-12:00',
+                 '12:00-1:00', '1:00-2:00', '2:00-3:00', '3:00-4:00', '4:00-5:00', '5:00-6:00']
+        entries = []
+        id_counter = 1
+        current_day = None
+        current_time = None
+        for block in blocks:
+            text = block['text']
+            # Recognize days
+            if any(day.lower() == text.lower() for day in days):
+                current_day = text
+                continue
+            # Recognize time formats
+            if re.match(r'\d{1,2}:\d{2}', text):
+                current_time = text
+                continue
+            # Attempt to parse entries based on contents
+            if len(text) > 1:
+                parsed = self.parse_cell_content(text)
+                if parsed['subject']:
+                    entry = {
+                        'id': id_counter,
+                        'day': current_day or 'Unknown',
+                        'time': current_time or 'Unknown',
+                        **parsed
+                    }
+                    entries.append(entry)
+                    id_counter += 1
+        return entries
+
+    def parse_cell_content(self, text):
+        result = {'subject':'', 'faculty':'', 'room':'', 'batch':'', 'type':'lecture'}
+        try:
+            if 'break' in text.lower():
+                result['subject'] = 'BREAK'
+                result['type'] = 'break'
+                return result
+            if 'library' in text.lower():
+                result['subject'] = 'LIBRARY'
+                result['type'] = 'library'
+                return result
+            faculty = re.findall(r'\[([A-Z]+)\]', text)
+            result['faculty'] = faculty[0] if faculty else ''
+            txt = re.sub(r'\[[A-Z]+\]', '', text)
+            room_match = re.findall(r'(CR|CL|TR|LAB)[-\s]*\w+', txt)
+            result['room'] = room_match[0] if room_match else ''
+            batch_match = re.findall(r'[A-Z]\d+', txt)
+            result['batch'] = batch_match[0] if batch_match else ''
+            txt_clean = txt
+            # Remove known parts
+            for elem in faculty + room_match + batch_match:
+                txt_clean = txt_clean.replace(elem, '')
+            result['subject'] = txt_clean.strip(' -_')
+            if 'LAB' in result['room'].upper():
+                result['type'] = 'lab'
+        except Exception:
+            result['subject'] = text
+        return result
+
+    def save_results(self, entries, filename="timetable_output.json"):
+        data = {
+            "app_info": {
+                "name": "Optimized Tesseract Timetable Extractor",
+                "version": "1.0",
+                "extraction_date": datetime.now().isoformat(),
+                "method": "Tesseract OCR"
+            },
+            "schedule": entries,
+            "statistics": {
+                "total_entries": len(entries),
+                "lecture_count": len([e for e in entries if e['type']=='lecture']),
+                "lab_count": len([e for e in entries if e['type']=='lab']),
+                "break_count": len([e for e in entries if e['type']=='break']),
+                "library_count": len([e for e in entries if e['type']=='library']),
+            }
+        }
+        with open(filename, 'w') as f:
+            json.dump(data, f, indent=2)
+        print(f"Saved results to {filename}")
+
+def main():
+    IMAGE_PATH = "test4.png" 
+    if not os.path.exists(IMAGE_PATH):
+        print(f"Error: Image {IMAGE_PATH} not found.")
+        return
+    extractor = OptimizedTesseractExtractor()
+    if not extractor.tesseract_available:
+        print("Please install Tesseract OCR and add to PATH.")
+        return
+    entries = extractor.extract_with_multiple_psm(IMAGE_PATH)
+    if entries:
+        extractor.save_results(entries)
+    else:
+        print("No entries extracted.")
+
+if __name__ == "__main__":
+    main()
